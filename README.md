@@ -1,0 +1,2 @@
+# docker-mangos
+Containerzing mangos
