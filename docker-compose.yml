@@ -1,0 +1,64 @@
+version: '3'
+
+services:
+  realmdb:
+    image: mariadb:latest
+    volumes:
+      - realmdb_data:/var/lib/mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: blablabla
+      MYSQL_DATABASE: realmdb
+      MYSQL_USER: mangos
+      MYSQL_PASSWORD: mangos
+  realmd:
+    build:
+      dockerfile: Dockerfile-realmd
+      context: .
+    command: /usr/local/bin/docker-realmd
+    depends_on:
+      - "realmdb"
+    environment:
+      DB_PORT: 3306
+    ports: 
+      - "3724:3724"
+  characterdb:
+    image: mariadb:latest
+    volumes:
+      - character0db_data:/var/lib/mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: blablabla
+      MYSQL_DATABASE: character0
+      MYSQL_USER: mangos
+      MYSQL_PASSWORD: mangos
+  worlddb:
+    image: mariadb:latest
+    volumes:
+      - mangos0db_data:/var/lib/mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: blablabla
+      MYSQL_DATABASE: mangos0
+      MYSQL_USER: mangos
+      MYSQL_PASSWORD: mangos
+  mangos:
+    build:
+      dockerfile: Dockerfile-mangos
+      context: .
+    command: /usr/local/bin/docker-mangosd
+    environment:
+      DB_PORT: 3306
+    ports:
+      - "8085:8085"
+    depends_on:
+      - "realmdb"
+      - "realmd"
+      - "characterdb"
+      - "worlddb"
+    volumes:
+    - /srv/docker-mangos/staticdata:/srv/mangos_data
+volumes:
+  realmdb_data:
+  character0db_data:
+  mangos0db_data:

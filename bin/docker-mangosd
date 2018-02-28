@@ -1,0 +1,105 @@
+#!/usr/bin/env python
+import os
+import socket
+import time
+import logging
+import subprocess
+import MySQLdb
+
+
+def execsqlfile(conn,dbname,sqlfile):
+    cur = conn.cursor()
+    cur.execute('use '+dbname+';')
+    fullline = ''
+    for line in open(sqlfile,'r'):
+        templine = line.strip()
+        if len(templine) == 0:
+            continue
+        if templine[0] == "#" or templine[0:1] == "--":
+            continue
+        fullline += line
+        if not ';' in line[-3:]:
+            continue
+        try:
+            logging.debug(fullline)
+            cur.execute(fullline)
+        except MySQLdb.OperationalError as e:
+            if e[1] == 'Query was empty':
+                continue
+            else:
+                logging.critical(e)
+        fullline = ''
+    throwaway = cur.fetchall()
+    cur.close()
+    conn.commit()
+    return 0
+
+def dbcheck(dbhost, dbname, port, insertfile):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    while True:
+        try:
+            s.connect((dbhost, port))
+            s.close()
+            break
+        except socket.error as e:
+            logging.info('Database not up yet {}.{}:{}, waiting 1s...'.format(dbhost,dbname,port))
+            time.sleep(1)
+
+    logging.info('Database {} connection made'.format(dbname))
+    conn = MySQLdb.connect(host=dbhost, user="mangos",passwd="mangos")
+    cur = conn.cursor()
+#    try:
+    cur.execute('SELECT * FROM information_schema.tables WHERE table_name = "db_version" and table_schema="{}"'.format(dbname))
+    result=cur.fetchone()
+    if result != None:
+        cur.close()
+        conn.close()
+        return 0
+    logging.info('{} Tables not present, running creation'.format(dbname))
+#    finally:
+    if isinstance(insertfile, list):
+         for item in insertfile:
+             logging.critical("Running item {}".format(item))
+             logging.critical("item {}".format(item.endswith('.sql')))
+             if item.endswith('.sql'):
+                logging.info('SQL INSERT {}: Executing {}'.format(dbname,item))
+                execsqlfile(conn,dbname,item)
+             elif item.endswith('/'):
+                # Explode folder
+                for f in os.listdir(item):
+                    if os.path.isfile(os.path.join(item,f)):
+                        logging.info('SQL INSERT {}: Executing {}'.format(dbname,f))
+                        execsqlfile(conn, dbname ,os.path.join(item,f))
+    else:
+        execsqlfile(conn,dbname,insertfile)
+    cur.close()
+    conn.close()
+    logging.info('Database {} load complete'.format(dbname))
+
+#=======================================
+
+def main():
+    logging.basicConfig(level=logging.DEBUG)
+    characterdb = 'character0'
+    worlddb = 'mangos0'
+    port = int(os.environ["DB_PORT"])
+    charactersqlfile = '/root/database/Character/Setup/characterLoadDB.sql'
+    #worldsqlfiles = ['/root/database/World/Setup/mangosdLoadDB.sql','/root/database/World/Setup/FullDB/', '/root/database/World/Updates/Rel21/']
+    worldsqlfiles = ['/root/database/World/Setup/mangosdLoadDB.sql','/root/database/World/Setup/FullDB/']
+
+    #characterdb
+    dbcheck("characterdb", characterdb, port, charactersqlfile)
+    #Worlddb
+    dbcheck("worlddb", worlddb, port, worldsqlfiles)
+
+    mangosd = subprocess.Popen("mangosd",stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    while mangosd.poll() is None:
+        stdout = mangosd.stdout.readline()
+        if stdout != '':
+            logging.info(stdout)
+        stderr = mangosd.stderr.readline()
+        if stderr != '':
+            logging.critical(stderr)
+
+if __name__ == "__main__":
+    main()

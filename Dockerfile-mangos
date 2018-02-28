@@ -1,0 +1,9 @@
+FROM debian:8
+MAINTAINER kcl
+RUN apt-get -y update ; apt-get install -y git clang cmake libssl-dev libtool libmysql++-dev bzip2 python-mysqldb
+RUN cd /root ; git clone https://github.com/mangoszero/server.git serverZero --recursive ; git clone --recursive https://github.com/mangoszero/database.git
+RUN cd /root/serverZero ; cmake . -DPLAYERBOTS=yes -DSOAP=yes -DCMAKE_INSTALL_PREFIX=/usr/local/ -DCONF_DIR=etc/ ; make ; make install ; make clean
+ADD etc /usr/local/etc
+ADD bin /usr/local/bin
+WORKDIR /usr/local/bin
+CMD /usr/local/bin/docker-mangosd
